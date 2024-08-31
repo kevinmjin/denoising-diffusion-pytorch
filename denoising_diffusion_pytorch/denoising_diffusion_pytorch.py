@@ -32,6 +32,13 @@ from denoising_diffusion_pytorch.attend import Attend
 
 from denoising_diffusion_pytorch.version import __version__
 
+import numpy as np
+import seaborn as sns
+import matplotlib.pyplot as plt
+from matplotlib import cm
+from sunpy.visualization import colormaps as cmp
+
+
 # constants
 
 ModelPrediction =  namedtuple('ModelPrediction', ['pred_noise', 'pred_x_start'])
@@ -1311,25 +1318,90 @@ class Trainer2:
                             milestone = self.step // self.save_and_sample_every
                             batches = num_to_groups(self.num_samples, self.batch_size)
                             all_images_list = list(map(lambda n: self.ema.ema_model.sample(batch_size=n), batches))
-
+                            
                         all_images = torch.cat(all_images_list, dim = 0)
 
-                        utils.save_image(all_images, str(self.results_folder / f'sample-{milestone}.png'), nrow = int(math.sqrt(self.num_samples)))
+                        if self.ds.filter_channel is not None:
+                            
+                            
+                            channels = ['94', '131', '171', '193', '211', '304', '335', '1600', 'hmi', "pil"] 
+                            
+                            ## find index of filter_channel in channels
+                            idx = channels.index(self.ds.filter_channel)
+                            
+                            GL = True
+                            GL_path = "/nfs/clasp-solsticedisk"
+                            solstice_path = "/data"
+                            if GL:
+                                used_path = GL_path
+                            else:
+                                used_path = solstice_path
+                            channel_max = np.load(f"{used_path}/CLEAR/kejin/data/latent_diffusion_slice_data/channel_max.npy")
+                            channel_min = np.load(f"{used_path}/CLEAR/kejin/data/latent_diffusion_slice_data/channel_min.npy")
+                            
+                            max_val = channel_max[idx]
+                            min_val = channel_min[idx]
+                            
+                            unormalize_transform = T.Compose([
+                                T.Lambda(lambda t: (t + 1)/2),
+                                T.Lambda(lambda t: t * (max_val - min_val) + min_val)
+                            ])
+                            
+                            all_images = unormalize_transform(all_images)
+                            
+                            plot_channel(all_images, self.ds.filter_channel, int(math.sqrt(self.num_samples)), savefig=True, path=str(self.results_folder / f'sample-{milestone}.png'))
 
-                        # whether to calculate fid
-
-                        if self.calculate_fid:
-                            fid_score = self.fid_scorer.fid_score()
-                            accelerator.print(f'fid_score: {fid_score}')
-
-                        if self.save_best_and_latest_only:
-                            if self.best_fid > fid_score:
-                                self.best_fid = fid_score
-                                self.save("best")
-                            self.save("latest")
+                            
+                            
                         else:
-                            self.save(milestone)
+                            utils.save_image(all_images, str(self.results_folder / f'sample-{milestone}.png'), nrow = int(math.sqrt(self.num_samples)))
+
+                            # whether to calculate fid
+
+                            if self.calculate_fid:
+                                fid_score = self.fid_scorer.fid_score()
+                                accelerator.print(f'fid_score: {fid_score}')
+
+                            if self.save_best_and_latest_only:
+                                if self.best_fid > fid_score:
+                                    self.best_fid = fid_score
+                                    self.save("best")
+                                self.save("latest")
+                            else:
+                                self.save(milestone)
 
                 pbar.update(1)
 
         accelerator.print('training complete')
+
+def plot_channel(data, ch, nrow,savefig=False, path=None):
+    # panel plot of AIA/HMI channels (slices based on PIL)
+    channels = ['94','131','171','193','211','304','335','1600','hmi','pil']
+    channel_cm = [cmp.cm.sdoaia94, cmp.cm.sdoaia131, cmp.cm.sdoaia171, cmp.cm.sdoaia193,
+                  cmp.cm.sdoaia211, cmp.cm.sdoaia304, cmp.cm.sdoaia335, cmp.cm.sdoaia1600, 
+                  cm.gist_gray, cm.gist_gray]
+    idx = channels.index(ch)
+    to_use_color = channel_cm[idx]
+        
+
+    # set the canvas for plotting
+    fig, ax = plt.subplots(nrow,nrow,figsize=(20, 20))
+    
+    for i in range(data.shape[0]):
+        row = i // nrow
+        col = i % nrow
+        plotdata = data[i]
+        yticks = np.arange(0, plotdata.shape[0], 100)
+        xticks = np.arange(0, plotdata.shape[1], 100)
+        
+        sns.heatmap(plotdata, ax = ax[row,col], 
+                    cmap = to_use_color, cbar_kws = dict(use_gridspec=False,location="bottom"),
+                    xticklabels = xticks, yticklabels = yticks)
+        # set the ticks and titles
+        ax[row,col].set_xticks(xticks)
+        ax[row,col].set_yticks(yticks)
+    
+    if savefig:
+        plt.savefig(path, dpi=600)
+    else:
+        plt.show()
