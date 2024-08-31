@@ -1390,7 +1390,7 @@ def plot_channel(data, ch, nrow,savefig=False, path=None):
     for i in range(data.shape[0]):
         row = i // nrow
         col = i % nrow
-        plotdata = data[i]
+        plotdata = data[i].squeeze() # remove the channel dimension
         yticks = np.arange(0, plotdata.shape[0], 100)
         xticks = np.arange(0, plotdata.shape[1], 100)
         
