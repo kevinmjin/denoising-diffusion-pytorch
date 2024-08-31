@@ -1322,8 +1322,7 @@ class Trainer2:
                         all_images = torch.cat(all_images_list, dim = 0)
 
                         if self.ds.filter_channel is not None:
-                            
-                            
+                            all_images = all_images.cpu().detach()
                             channels = ['94', '131', '171', '193', '211', '304', '335', '1600', 'hmi', "pil"] 
                             
                             ## find index of filter_channel in channels
@@ -1349,7 +1348,8 @@ class Trainer2:
                             
                             all_images = unormalize_transform(all_images)
                             
-                            plot_channel(all_images, self.ds.filter_channel, int(math.sqrt(self.num_samples)), savefig=True, path=str(self.results_folder / f'sample-{milestone}.png'))
+                            plot_channel(all_images, self.ds.filter_channel, int(math.sqrt(self.num_samples)), savefig=True, 
+                                         path=str(self.results_folder / f'sample-{milestone}.png'))
 
                             
                             
