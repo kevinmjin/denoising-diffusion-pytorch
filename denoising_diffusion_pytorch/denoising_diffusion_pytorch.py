@@ -1296,9 +1296,11 @@ class Trainer2:
                         total_loss += loss.item()
 
                     self.accelerator.backward(loss)
-
+                if self.step % (len(self.ds) // self.batch_size) == 0:
+                    print(f'loss at step {self.step}: {total_loss:.4f}', flush = True)
                 pbar.set_description(f'loss: {total_loss:.4f}')
-
+                print(f'loss: {total_loss:.4f}', flush = True)
+                
                 accelerator.wait_for_everyone()
                 accelerator.clip_grad_norm_(self.model.parameters(), self.max_grad_norm)
 
