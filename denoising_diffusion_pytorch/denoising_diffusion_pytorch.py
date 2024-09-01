@@ -1279,7 +1279,7 @@ class Trainer2:
     def train(self):
         accelerator = self.accelerator
         device = accelerator.device
-
+        print(f"Epoch Size is {len(self.ds) // self.batch_size}", flush = True)
         with tqdm(initial = self.step, total = self.train_num_steps, disable = not accelerator.is_main_process) as pbar:
 
             while self.step < self.train_num_steps:
@@ -1296,10 +1296,11 @@ class Trainer2:
                         total_loss += loss.item()
 
                     self.accelerator.backward(loss)
-                if self.step % (len(self.ds) // self.batch_size) == 0:
+                if self.step < len(self.ds) // self.batch_size:
+                    print(f'loss at step {self.step}: {total_loss:.4f}', flush = True)
+                elif self.step % (len(self.ds) // self.batch_size) == 0:
                     print(f'loss at step {self.step}: {total_loss:.4f}', flush = True)
                 pbar.set_description(f'loss: {total_loss:.4f}')
-                print(f'loss: {total_loss:.4f}', flush = True)
                 
                 accelerator.wait_for_everyone()
                 accelerator.clip_grad_norm_(self.model.parameters(), self.max_grad_norm)
