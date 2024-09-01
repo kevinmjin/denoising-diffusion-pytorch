@@ -1350,6 +1350,7 @@ class Trainer2:
                             
                             plot_channel(all_images, self.ds.filter_channel, int(math.sqrt(self.num_samples)), savefig=True, 
                                          path=str(self.results_folder / f'sample-{milestone}.png'))
+                            self.save(milestone)
 
                             
                             
