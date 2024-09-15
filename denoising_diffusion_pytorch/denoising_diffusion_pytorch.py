@@ -37,6 +37,7 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 from matplotlib import cm
 from sunpy.visualization import colormaps as cmp
+import pickle
 
 
 # constants
@@ -1138,7 +1139,8 @@ class Trainer2:
         max_grad_norm = 1.,
         num_fid_samples = 50000,
         save_best_and_latest_only = False,
-        memo = False
+        memo = False,
+        norm_method = "min_max"
     ):
         super().__init__()
 
@@ -1179,6 +1181,7 @@ class Trainer2:
 
         #self.ds = Dataset(folder, self.image_size, augment_horizontal_flip = augment_horizontal_flip, convert_image_to = convert_image_to)
         self.ds = dataset
+        self.norm_method = norm_method
         if not memo:
             assert len(self.ds) >= 100, 'you should have at least 100 images in your folder. at least 10k images recommended'
 
@@ -1327,35 +1330,67 @@ class Trainer2:
                         all_images = torch.cat(all_images_list, dim = 0)
 
                         if self.ds.filter_channel is not None:
-                            all_images = all_images.cpu().detach()
-                            channels = ['94', '131', '171', '193', '211', '304', '335', '1600', 'hmi', "pil"] 
-                            
-                            ## find index of filter_channel in channels
-                            idx = channels.index(self.ds.filter_channel)
-                            
-                            GL = True
-                            GL_path = "/nfs/clasp-solsticedisk"
-                            solstice_path = "/data"
-                            if GL:
-                                used_path = GL_path
+                            if self.norm_method == "min_max":
+                                all_images = all_images.cpu().detach()
+                                channels = ['94', '131', '171', '193', '211', '304', '335', '1600', 'hmi', "pil"] 
+                                
+                                ## find index of filter_channel in channels
+                                idx = channels.index(self.ds.filter_channel)
+                                
+                                GL = True
+                                GL_path = "/nfs/clasp-solsticedisk"
+                                solstice_path = "/data"
+                                if GL:
+                                    used_path = GL_path
+                                else:
+                                    used_path = solstice_path
+                                channel_max = np.load(f"{used_path}/CLEAR/kejin/data/latent_diffusion_slice_data/channel_max.npy")
+                                channel_min = np.load(f"{used_path}/CLEAR/kejin/data/latent_diffusion_slice_data/channel_min.npy")
+                                
+                                max_val = channel_max[idx]
+                                min_val = channel_min[idx]
+                                
+                                unormalize_transform = T.Compose([
+                                    T.Lambda(lambda t: (t + 1)/2),
+                                    T.Lambda(lambda t: t * (max_val - min_val) + min_val)
+                                ])
+                                
+                                all_images = unormalize_transform(all_images)
+                                
+                                plot_channel(all_images, self.ds.filter_channel, int(math.sqrt(self.num_samples)), savefig=True, 
+                                            path=str(self.results_folder / f'sample-{milestone}.png'))
+                                self.save(milestone)
+                            elif self.norm_method == "ecdf":
+                                all_images = all_images.cpu().detach()
+                                channels = ['94', '131', '171', '193', '211', '304', '335', '1600', 'hmi', "pil"] 
+                                
+                                ## find index of filter_channel in channels
+                                idx = channels.index(self.ds.filter_channel)
+                                
+                                GL = True
+                                GL_path = "/nfs/clasp-solsticedisk"
+                                solstice_path = "/data"
+                                if GL:
+                                    used_path = GL_path
+                                else:
+                                    used_path = solstice_path
+                                INPUT_ = f"{used_path}/CLEAR/kejin/data/flare_ECDF"
+                                ecdf_function_path = f"{INPUT_}/functions"
+                                
+                                with open(f"{ecdf_function_path}/{self.ds.filter_channel}_ecdf.pkl", "rb") as f:
+                                    ecdf = pickle.load(f)
+                                unormalize_transform = T.Compose([
+                                    T.Lambda(lambda t: (t + 1)/2),
+                                    T.Lambda(lambda t: torch.tensor(ecdf.x[torch.searchsorted(torch.tensor(ecdf.y), t)]))
+                                ])
+                                all_images = unormalize_transform(all_images)
+                                plot_channel(all_images, self.ds.filter_channel, int(math.sqrt(self.num_samples)), savefig=True, 
+                                            path=str(self.results_folder / f'sample-{milestone}.png'))
+                                self.save(milestone)
+
                             else:
-                                used_path = solstice_path
-                            channel_max = np.load(f"{used_path}/CLEAR/kejin/data/latent_diffusion_slice_data/channel_max.npy")
-                            channel_min = np.load(f"{used_path}/CLEAR/kejin/data/latent_diffusion_slice_data/channel_min.npy")
-                            
-                            max_val = channel_max[idx]
-                            min_val = channel_min[idx]
-                            
-                            unormalize_transform = T.Compose([
-                                T.Lambda(lambda t: (t + 1)/2),
-                                T.Lambda(lambda t: t * (max_val - min_val) + min_val)
-                            ])
-                            
-                            all_images = unormalize_transform(all_images)
-                            
-                            plot_channel(all_images, self.ds.filter_channel, int(math.sqrt(self.num_samples)), savefig=True, 
-                                         path=str(self.results_folder / f'sample-{milestone}.png'))
-                            self.save(milestone)
+                                print(f"Norm method {self.norm_method} not implemented", flush = True)
+                                
 
                             
                             
