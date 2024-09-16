@@ -1140,7 +1140,8 @@ class Trainer2:
         num_fid_samples = 50000,
         save_best_and_latest_only = False,
         memo = False,
-        norm_method = "min_max"
+        norm_method = "min_max",
+        num_workers = 8
     ):
         super().__init__()
 
@@ -1185,7 +1186,7 @@ class Trainer2:
         if not memo:
             assert len(self.ds) >= 100, 'you should have at least 100 images in your folder. at least 10k images recommended'
 
-        dl = DataLoader(self.ds, batch_size = train_batch_size, shuffle = True, pin_memory = True, num_workers = 8)
+        dl = DataLoader(self.ds, batch_size = train_batch_size, shuffle = True, pin_memory = True, num_workers = num_workers)
 
         dl = self.accelerator.prepare(dl)
         self.dl = cycle(dl)
